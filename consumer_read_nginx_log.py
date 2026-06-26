@@ -10,8 +10,7 @@ JakartaTz = pytz.timezone("Asia/Jakarta")
 from dotenv import load_dotenv
 from pathlib import Path
 
-dotenv_path = Path('/etc/config_db/.env')
-load_dotenv(dotenv_path=dotenv_path)
+load_dotenv()
 
 stage_program = os.environ['stage_program']
 internal_url_hit = os.environ['internal_url_hit']
@@ -50,16 +49,22 @@ def parse_nginx_log(log_line):
     except ValueError:
         print("Failed to parse log")
 
-log_file_path = "/var/log/nginx/access.log"
+if os.name == 'nt':
+    import time
+    print("Running in Windows environment. consumer_read_nginx_log is meant for Linux NGINX logs. Skipping.", flush=True)
+    while True:
+        time.sleep(3600)
+else:
+    log_file_path = "/var/log/nginx/access.log"
 
-tail_command = ["tail", "-F", log_file_path]
+    tail_command = ["tail", "-F", log_file_path]
 
-tail_process = subprocess.Popen(tail_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    tail_process = subprocess.Popen(tail_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
-try:
-    for line in tail_process.stdout:
-        parse_nginx_log(line.strip())
-except KeyboardInterrupt:
-    pass
-finally:
-    tail_process.kill()
+    try:
+        for line in tail_process.stdout:
+            parse_nginx_log(line.strip())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        tail_process.kill()

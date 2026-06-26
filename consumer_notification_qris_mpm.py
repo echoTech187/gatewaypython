@@ -69,32 +69,63 @@ class RabbitMQConsumerThread(threading.Thread):
                         print(f"[Get Full Response] {datetime.datetime.now(JakartaTz)} [xx] {response.text} [xx] {data} (Thread {self.thread_id})", flush=True)
 
 
-                        print("================ (Thread {self.thread_id})", flush=True)
+                        print(f"================ (Thread {self.thread_id})", flush=True)
 
 
 
                         if response.status_code == 200:
 
 
-                            ch.basic_ack(delivery_tag=method.delivery_tag)
+                            is_success = False
+
+
+                            try:
+
+
+                                resp_json = response.json()
+
+
+                                if resp_json.get("responseCode") == "SUCCESS":
+
+
+                                    is_success = True
+
+
+                            except ValueError:
+
+
+                                pass
+
+
+
+                            if not is_success:
+                                error_msg = f"HTTP 200 but Not SUCCESS. Response: {response.text}"
+                                props = pika.BasicProperties(delivery_mode=2, headers={"x-error-detail": error_msg})
+                                ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=body, properties=props)
+                                ch.basic_ack(delivery_tag=method.delivery_tag)
+                                print(f"[!] {datetime.datetime.now(JakartaTz)} Rejected (Not SUCCESS), moved to DLQ manually (Thread {self.thread_id})", flush=True)
+
+
+                            else:
+
+
+                                ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
                         else:
-
-
-                            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-
-                            print(f"[!] {datetime.datetime.now(JakartaTz)} Rejected, moved to DLQ (Thread {self.thread_id})", flush=True)
+                            error_msg = f"HTTP Error {response.status_code}. Response: {response.text}"
+                            props = pika.BasicProperties(delivery_mode=2, headers={"x-error-detail": error_msg})
+                            ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=body, properties=props)
+                            ch.basic_ack(delivery_tag=method.delivery_tag)
+                            print(f"[!] {datetime.datetime.now(JakartaTz)} Rejected (HTTP {response.status_code}), moved to DLQ manually (Thread {self.thread_id})", flush=True)
 
 
                     except Exception as e:
-
-
-                        print(f"[!] {datetime.datetime.now(JakartaTz)} Exception: {e}. Moved to DLQ (Thread {self.thread_id})", flush=True)
-
-
-                        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                        error_msg = f"System Exception/Timeout: {str(e)}"
+                        props = pika.BasicProperties(delivery_mode=2, headers={"x-error-detail": error_msg})
+                        ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=body, properties=props)
+                        ch.basic_ack(delivery_tag=method.delivery_tag)
+                        print(f"[!] {datetime.datetime.now(JakartaTz)} Exception: {e}. Moved to DLQ manually (Thread {self.thread_id})", flush=True)
 
                 else:
                     print("Key doesn't exist in JSON data", flush=True)
@@ -106,8 +137,7 @@ class RabbitMQConsumerThread(threading.Thread):
         channel.start_consuming()
 
 # Load environment variables from .env file
-dotenv_path = Path('/etc/config_db/.env')
-load_dotenv(dotenv_path=dotenv_path)
+load_dotenv()
 
 # Get environment variables
 host_name = os.environ['host_name']

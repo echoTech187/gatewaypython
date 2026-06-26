@@ -10,8 +10,7 @@ JakartaTz = pytz.timezone("Asia/Jakarta")
 from dotenv import load_dotenv
 from pathlib import Path
 
-dotenv_path = Path('/etc/config_db/.env')
-load_dotenv(dotenv_path=dotenv_path)
+load_dotenv()
 
 host_name = os.environ['host_name']
 host_port = os.environ['host_port']
