@@ -10,7 +10,8 @@ JakartaTz = pytz.timezone("Asia/Jakarta")
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv()
+dotenv_path = Path('/etc/config_db/.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 host_name = os.environ['host_name']
 host_port = os.environ['host_port']
@@ -30,14 +31,7 @@ print(' [*] %s Connecting to server ... ' % datetime.datetime.now(JakartaTz), fl
 credentials = pika.PlainCredentials(pika_user, pika_pass)
 connection = pika.BlockingConnection(pika.ConnectionParameters(host_name, host_port, '/', credentials))
 channel = connection.channel()
-channel.queue_declare(
-    queue=queue_name, 
-    durable=True, 
-    arguments={
-        "x-dead-letter-exchange": "dlx_notifications",
-        "x-dead-letter-routing-key": queue_name + "_dlq"
-    }
-)
+channel.queue_declare(queue=queue_name, durable=True)
 
 print(' [*] %s Waiting for messages.' % datetime.datetime.now(JakartaTz), flush=True)
 

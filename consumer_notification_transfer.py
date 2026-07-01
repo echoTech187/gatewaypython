@@ -55,14 +55,7 @@ class RabbitMQConsumerThread(threading.Thread):
         )
 
         channel = connection.channel()
-        channel.queue_declare(
-            queue=self.queue_name, 
-            durable=True, 
-            arguments={
-                "x-dead-letter-exchange": "dlx_notifications",
-                "x-dead-letter-routing-key": self.queue_name + "_dlq"
-            }
-        )
+        channel.queue_declare(queue=self.queue_name, durable=True)
 
         print(
             f'[*] {datetime.datetime.now(JakartaTz)} '
@@ -187,7 +180,8 @@ class RabbitMQConsumerThread(threading.Thread):
 # ============================
 # LOAD ENV
 # ============================
-load_dotenv()
+dotenv_path = Path('/etc/config_db/.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 host_name = os.environ['host_name']
 host_port = os.environ['host_port']

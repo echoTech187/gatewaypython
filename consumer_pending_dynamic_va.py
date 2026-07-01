@@ -31,14 +31,7 @@ class RabbitMQConsumerThread(threading.Thread):
         credentials = pika.PlainCredentials(self.pika_user, self.pika_pass)
         connection = pika.BlockingConnection(pika.ConnectionParameters(self.host_name, self.host_port, '/', credentials))
         channel = connection.channel()
-        channel.queue_declare(
-            queue=self.queue_name, 
-            durable=True, 
-            arguments={
-                "x-dead-letter-exchange": "dlx_notifications",
-                "x-dead-letter-routing-key": self.queue_name + "_dlq"
-            }
-        )
+        channel.queue_declare(queue=self.queue_name, durable=True)
 
         print(f'[*] {datetime.datetime.now(JakartaTz)} Waiting for messages. (Thread {self.thread_id})', flush=True)
 
@@ -57,96 +50,35 @@ class RabbitMQConsumerThread(threading.Thread):
                         'Content-Type': 'application/json'
                     }
 
-                    try:
+                    response = requests.request("POST", internal_url_hit+"/Pending/dynamicVa", headers=headers, data=payload)
 
+                    print(f"[Get Response Code] {datetime.datetime.now(JakartaTz)} [xx] {response.status_code} [xx] {data} (Thread {self.thread_id})", flush=True)
+                    print(f"[Get Full Response] {datetime.datetime.now(JakartaTz)} [xx] {response.text} [xx] {data} (Thread {self.thread_id})", flush=True)
 
-                        response = requests.request("POST", internal_url_hit+"/Pending/dynamicVa", headers=headers, data=payload, timeout=30)
+                    print("================ (Thread {self.thread_id})", flush=True)
 
+                    if response.status_code == 200:
+                        ch.basic_ack(delivery_tag=method.delivery_tag)
+                    else:
+                        timestamp = time.time()
+                        now = datetime.datetime.now(JakartaTz)
+                        expire = 1000 * int((now.replace(hour=23, minute=59, second=59, microsecond=999999) - now).total_seconds())
 
-                        print(f"[Get Response Code] {datetime.datetime.now(JakartaTz)} [xx] {response.status_code} [xx] {data} (Thread {self.thread_id})", flush=True)
-
-
-                        print(f"[Get Full Response] {datetime.datetime.now(JakartaTz)} [xx] {response.text} [xx] {data} (Thread {self.thread_id})", flush=True)
-
-
-                        print(f"================ (Thread {self.thread_id})", flush=True)
-
-
-
-                        if response.status_code == 200:
-
-
-                            is_success = False
-
-
-                            try:
-
-
-                                resp_json = response.json()
-
-
-                                if resp_json.get("responseCode") == "SUCCESS":
-
-
-                                    is_success = True
-
-
-                            except ValueError:
-
-
-                                pass
-
-
-
-                            if not is_success:
-
-
-                                data["error_detail"] = f"HTTP 200 but Not SUCCESS. Response: {response.text}"
-
-
-                                ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=json.dumps(data), properties=pika.BasicProperties(delivery_mode=2))
-
-
-                                ch.basic_ack(delivery_tag=method.delivery_tag)
-
-
-                                print(f"[!] {datetime.datetime.now(JakartaTz)} Rejected (Not SUCCESS), moved to DLQ manually (Thread {self.thread_id})", flush=True)
-
-
-                            else:
-
-
-                                ch.basic_ack(delivery_tag=method.delivery_tag)
-
-
-                        else:
-
-
-                            data["error_detail"] = f"HTTP Error {response.status_code}. Response: {response.text}"
-
-
-                            ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=json.dumps(data), properties=pika.BasicProperties(delivery_mode=2))
-
-
-                            ch.basic_ack(delivery_tag=method.delivery_tag)
-
-
-                            print(f"[!] {datetime.datetime.now(JakartaTz)} Rejected (HTTP {response.status_code}), moved to DLQ manually (Thread {self.thread_id})", flush=True)
-
-
-                    except Exception as e:
-
-
-                        data["error_detail"] = f"System Exception/Timeout: {str(e)}"
-
-
-                        ch.basic_publish(exchange="dlx_notifications", routing_key=self.queue_name + "_dlq", body=json.dumps(data), properties=pika.BasicProperties(delivery_mode=2))
-
+                        channel.basic_publish(
+                            exchange='',
+                            routing_key=self.queue_name,
+                            body=json.dumps(data),
+                            properties=pika.BasicProperties(
+                                delivery_mode=2,
+                                priority=int(properties.priority) + 1,
+                                expiration=str(expire),
+                                headers=properties.headers
+                            )
+                        )
 
                         ch.basic_ack(delivery_tag=method.delivery_tag)
-
-
-                        print(f"[!] {datetime.datetime.now(JakartaTz)} Exception: {e}. Moved to DLQ manually (Thread {self.thread_id})", flush=True)
+                        print("[!] {datetime.datetime.now(JakartaTz)} Rejected, going to sleep for a while (Thread {self.thread_id})", flush=True)
+                        time.sleep(10)
 
                 else:
                     print("Key doesn't exist in JSON data", flush=True)
@@ -158,7 +90,8 @@ class RabbitMQConsumerThread(threading.Thread):
         channel.start_consuming()
 
 # Load environment variables from .env file
-load_dotenv()
+dotenv_path = Path('/etc/config_db/.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 # Get environment variables
 host_name = os.environ['host_name']
