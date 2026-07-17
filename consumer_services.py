@@ -4,6 +4,10 @@ import subprocess
 import time
 import sys
 import threading
+from dotenv import load_dotenv
+
+# Load environment variables from .env file so child processes inherit them
+load_dotenv()
 
 def run_consumer(script_path):
     script_name = os.path.basename(script_path)
