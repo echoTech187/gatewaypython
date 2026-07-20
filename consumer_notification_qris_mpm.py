@@ -128,7 +128,7 @@ class RabbitMQConsumerThread(threading.Thread):
                             try:
                                 ref_id = data.get('msgInfo', {}).get('ref_qrisMpmId')
                                 if ref_id:
-                                    del_payload = json.dumps({"type": "qris", "ref_id": ref_id})
+                                    del_payload = json.dumps({"type": "qris-mpm", "ref_id": ref_id})
                                     requests.post(internal_url_hit+"/Notification/DeleteDlq", headers=headers, data=del_payload)
                             except Exception as e:
                                 print(f"Error deleting DLQ: {e}")

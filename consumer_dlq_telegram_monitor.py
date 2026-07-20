@@ -105,7 +105,8 @@ class DLQConsumerThread(threading.Thread):
                         "type": type_val,
                         "ref_id": ref_id,
                         "ref_cashin": ref_cashin,
-                        "ref_cashout": ref_cashout
+                        "ref_cashout": ref_cashout,
+                        "payload": body.decode('utf-8') if isinstance(body, bytes) else str(body)
                     }
                     try:
                         log_payload = json.dumps({"failed_messages": [failed_message]})
