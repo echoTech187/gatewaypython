@@ -8,57 +8,7 @@ import os
 import threading
 from dotenv import load_dotenv
 from pathlib import Path
-import hashlib
-from urllib.parse import urlencode
 
-# Lokasi file JSON untuk track last alert (digunakan bersama dengan DLQ Monitor)
-ALERT_STATE_FILE = os.path.join(os.path.dirname(__file__), 'logs', 'last_alerted.json')
-
-def check_and_send_recovery_alert(merchant_id, type_val, internal_url_hit):
-    if not merchant_id:
-        return
-        
-    merchant_id = str(merchant_id)
-    if os.path.exists(ALERT_STATE_FILE):
-        try:
-            with open(ALERT_STATE_FILE, 'r') as f:
-                alert_data = json.load(f)
-            
-            # Jika nilainya > 0, berarti sebelumnya sedang error dan dalam masa jeda
-            if merchant_id in alert_data and alert_data[merchant_id] > 0:
-                print(f"[+] Merchant {merchant_id} has recovered! Sending Telegram alert...", flush=True)
-                
-                # 1. Reset jeda agar tidak terkirim recovery berulang kali
-                alert_data[merchant_id] = 0
-                with open(ALERT_STATE_FILE, 'w') as f:
-                    json.dump(alert_data, f)
-                    
-                # 2. Buat Token & Link Resend
-                ts = int(time.time())
-                secret = "ResendGatewaySecret2026!"
-                raw_str = f"{merchant_id}{type_val}{ts}{secret}"
-                token = hashlib.md5(raw_str.encode('utf-8')).hexdigest()
-                
-                query_params = {
-                    'type': type_val,
-                    'merchantId': merchant_id,
-                    'ts': str(ts),
-                    'token': token
-                }
-                new_query = urlencode(query_params)
-                resend_link = f"{internal_url_hit}/Notification/BulkResend?{new_query}"
-                
-                # 3. Kirim pesan Telegram
-                info_text = f"✅ <b>[RECOVERY] API Merchant Aktif Kembali</b>\n\n"
-                info_text += f"Transaksi terbaru untuk Merchant: <b>{{merchantName}}</b> telah berhasil diproses dan layanan kembali normal.\n\n"
-                info_text += f"Silakan tekan tombol di bawah ini untuk mengirim ulang (Flush) semua sisa transaksi yang gagal sebelumnya:\n"
-                info_text += f"<a href='{resend_link}'>Eksekusi Bulk Resend (Direct API)</a>"
-                
-                payload_tg = json.dumps({"msgInfo": {"info_text": info_text, "merchantId": merchant_id}})
-                headers_tg = {'Content-Type': 'application/json'}
-                requests.post(internal_url_hit+"/Telegram/sendMessage", headers=headers_tg, data=payload_tg)
-        except Exception as e:
-            print(f"Error sending recovery alert: {e}", flush=True)
 class RabbitMQConsumerThread(threading.Thread):
     def __init__(
         self,
