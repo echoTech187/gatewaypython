@@ -82,10 +82,6 @@ class RabbitMQConsumerThread(threading.Thread):
                                     requests.post(internal_url_hit+"/Notification/DeleteDlq", headers=headers, data=del_payload)
                             except Exception as e:
                                 print(f"Error deleting DLQ: {e}")
-
-                        # Cek dan kirim notifikasi jika merchant ini baru saja pulih
-                        merchant_id = data.get('msgInfo', {}).get('merchantId') or data.get('msgInfo', {}).get('merchant_id')
-                        check_and_send_recovery_alert(merchant_id, "virtual-account", self.internal_url_hit)
                     else:
                         retry_count = data.get('retry_count', 0)
                         
